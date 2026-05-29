@@ -109,6 +109,7 @@
       transition: all 0.2s;
     }
     .form-input:focus { border-color: var(--green-500); background: rgba(74,222,128,0.08); box-shadow: 0 0 0 3px rgba(74,222,128,0.1); }
+    .form-input:disabled { opacity: 0.5; cursor: not-allowed; }
     .form-input::placeholder { color: var(--text-dim); opacity: 0.6; }
 
     .btn-login {
@@ -120,8 +121,9 @@
       cursor: pointer; transition: all 0.25s;
       letter-spacing: 0.02em; margin-top: 8px;
     }
-    .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(22,163,74,0.45); }
+    .btn-login:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(22,163,74,0.45); }
     .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
     /* Error/Success */
     .alert {
@@ -150,7 +152,7 @@
     .login-form { display: block; }
     .login-form.hidden { display: none; }
 
-    /* Password strength */
+    /* Password hint */
     .pw-hint { font-size: 11px; color: var(--text-dim); margin-top: 5px; }
 
     @media (max-width: 480px) {
@@ -191,7 +193,7 @@
           <label class="form-label">Password</label>
           <input class="form-input" type="password" id="login-password" placeholder="Masukkan password..." autocomplete="current-password" />
         </div>
-        <button class="btn-login" onclick="doLogin()">Masuk →</button>
+        <button class="btn-login" id="btn-login" onclick="doLogin()">Masuk →</button>
       </div>
 
       <!-- REGISTER FORM -->
@@ -207,49 +209,38 @@
         <div class="form-group">
           <label class="form-label">Password</label>
           <input class="form-input" type="password" id="reg-password" placeholder="Minimal 4 karakter..." maxlength="50" />
-          <p class="pw-hint">⚠️ Minimal 4 karakter. Data disimpan di browser.</p>
+          <p class="pw-hint">⚠️ Minimal 4 karakter. Data disimpan di database server.</p>
         </div>
-        <button class="btn-login" onclick="doRegister()">Buat Akun →</button>
+        <button class="btn-login" id="btn-register" onclick="doRegister()">Buat Akun →</button>
       </div>
 
       <div class="demo-info">
         <strong>👑 Akun Admin Default:</strong><br>
         Username: <strong>admin</strong> | Password: <strong>admin123</strong><br><br>
-        <strong>👤 Demo User:</strong><br>
-        Klik "Daftar" untuk buat akun baru, atau login dengan akun yang sudah dibuat.
+        <strong>👤 User Baru:</strong><br>
+        Klik "Daftar" untuk buat akun. Data tersimpan di database MySQL.
       </div>
     </div>
   </div>
 
+  <!-- api-client.js WAJIB dimuat sebelum script ini -->
+  <script src="js/api-client.js"></script>
+
   <script>
     'use strict';
 
-    // ── Auth Storage ──────────────────────────
-    const USERS_KEY = 'sholat_users';
     const SESSION_KEY = 'sholat_session';
 
-    function getUsers() {
-      try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); }
-      catch { return []; }
-    }
-    function saveUsers(users) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    }
-    function initDefaultAdmin() {
-      const users = getUsers();
-      if (!users.find(u => u.username === 'admin')) {
-        users.push({ username: 'admin', password: 'admin123', name: 'Administrator', role: 'admin', createdAt: new Date().toISOString() });
-        saveUsers(users);
+    // ── Cek sudah login ───────────────────────
+    // Kalau sudah ada token yang valid, langsung redirect
+    (function checkAlreadyLoggedIn() {
+      const token = localStorage.getItem('sholat_token');
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (token && session && session.username) {
+        if (session.role === 'admin') window.location.href = 'admin.html';
+        else window.location.href = 'app.html';
       }
-    }
-    initDefaultAdmin();
-
-    // ── Check already logged in ───────────────
-    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-    if (session && session.username) {
-      if (session.role === 'admin') window.location.href = 'admin.html';
-      else window.location.href = 'app.html';
-    }
+    })();
 
     // ── Tab switching ─────────────────────────
     function switchTab(tab) {
@@ -260,7 +251,7 @@
       hideAlert();
     }
 
-    // ── Alert ──────────────────────────────────
+    // ── Alert ─────────────────────────────────
     function showAlert(msg, type = 'error') {
       const el = document.getElementById('alert-box');
       el.textContent = msg;
@@ -270,45 +261,73 @@
       document.getElementById('alert-box').classList.remove('show');
     }
 
-    // ── Login ──────────────────────────────────
-    function doLogin() {
+    // ── Helper: set loading state tombol ─────
+    function setLoading(btnId, loading, originalText) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.disabled = loading;
+      btn.textContent = loading ? '⏳ Memuat...' : originalText;
+    }
+
+    // ── LOGIN ─────────────────────────────────
+    async function doLogin() {
       const username = document.getElementById('login-username').value.trim().toLowerCase();
       const password = document.getElementById('login-password').value;
-      if (!username || !password) { showAlert('⚠️ Isi username dan password!'); return; }
-      const users = getUsers();
-      const user = users.find(u => u.username === username && u.password === password);
-      if (!user) { showAlert('❌ Username atau password salah!'); return; }
-      // Create session
-      const session = { username: user.username, name: user.name, role: user.role, loginAt: new Date().toISOString() };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      showAlert(`✅ Selamat datang, ${user.name}! 🌟`, 'success');
-      setTimeout(() => {
-        if (user.role === 'admin') window.location.href = 'admin.html';
-        else window.location.href = 'app.html';
-      }, 800);
+      if (!username || !password) {
+        showAlert('⚠️ Isi username dan password!'); return;
+      }
+      setLoading('btn-login', true, 'Masuk →');
+      hideAlert();
+
+      const res = await apiLogin(username, password);
+
+      setLoading('btn-login', false, 'Masuk →');
+      if (res.success) {
+        showAlert(`✅ Selamat datang, ${res.user.name}! 🌟`, 'success');
+        setTimeout(() => {
+          if (res.user.role === 'admin') window.location.href = 'admin.html';
+          else window.location.href = 'app.html';
+        }, 800);
+      } else {
+        showAlert('❌ ' + (res.message || 'Username atau password salah!'));
+      }
     }
 
-    // ── Register ───────────────────────────────
-    function doRegister() {
-      const name = document.getElementById('reg-name').value.trim();
+    // ── REGISTER ──────────────────────────────
+    async function doRegister() {
+      const name     = document.getElementById('reg-name').value.trim();
       const username = document.getElementById('reg-username').value.trim().toLowerCase();
       const password = document.getElementById('reg-password').value;
-      if (!name || !username || !password) { showAlert('⚠️ Semua field harus diisi!'); return; }
-      if (password.length < 4) { showAlert('⚠️ Password minimal 4 karakter!'); return; }
-      if (!/^[a-z0-9_]+$/.test(username)) { showAlert('⚠️ Username hanya boleh huruf, angka, dan _'); return; }
-      const users = getUsers();
-      if (users.find(u => u.username === username)) { showAlert('❌ Username sudah dipakai!'); return; }
-      const newUser = { username, password, name, role: 'user', createdAt: new Date().toISOString() };
-      users.push(newUser);
-      saveUsers(users);
-      showAlert('✅ Akun berhasil dibuat! Silakan login.', 'success');
-      setTimeout(() => {
-        switchTab('login');
-        document.getElementById('login-username').value = username;
-      }, 1000);
+
+      if (!name || !username || !password) {
+        showAlert('⚠️ Semua field harus diisi!'); return;
+      }
+      if (password.length < 4) {
+        showAlert('⚠️ Password minimal 4 karakter!'); return;
+      }
+      if (!/^[a-z0-9_]+$/.test(username)) {
+        showAlert('⚠️ Username hanya boleh huruf, angka, dan _'); return;
+      }
+
+      setLoading('btn-register', true, 'Buat Akun →');
+      hideAlert();
+
+      const res = await apiRegister(username, password, name);
+
+      setLoading('btn-register', false, 'Buat Akun →');
+      if (res.success) {
+        showAlert('✅ ' + res.message, 'success');
+        setTimeout(() => {
+          switchTab('login');
+          document.getElementById('login-username').value = username;
+          document.getElementById('login-password').focus();
+        }, 1200);
+      } else {
+        showAlert('❌ ' + (res.message || 'Registrasi gagal'));
+      }
     }
 
-    // Enter key support
+    // ── Enter key support ─────────────────────
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       if (!document.getElementById('register-form').classList.contains('active')) doLogin();

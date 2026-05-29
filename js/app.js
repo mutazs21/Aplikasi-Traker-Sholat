@@ -2,6 +2,9 @@
    SHOLAT TRACKER — APP.JS (Extended)
    Features: Auth guard, Jamaah mode,
    Dhuha, Tahajud, Quran, Puasa tracking
+   ── VERSI PHP/MySQL ──
+   localStorage diganti dengan API calls
+   via api-client.js
 ═══════════════════════════════════════════ */
 
 'use strict';
@@ -14,6 +17,10 @@ function checkAuth() {
   try {
     const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
     if (!session || !session.username) {
+      window.location.href = 'index.html'; return false;
+    }
+    // Pastikan token ada
+    if (!getToken()) {
       window.location.href = 'index.html'; return false;
     }
     currentUser = session;
@@ -38,8 +45,7 @@ function checkAuth() {
 
 function logout() {
   if (confirm('Yakin ingin keluar?')) {
-    localStorage.removeItem(SESSION_KEY);
-    window.location.href = 'index.html';
+    apiLogout(); // dari api-client.js — hapus token & redirect
   }
 }
 
@@ -52,8 +58,8 @@ const PRAYERS = [
   { key: 'isya',    label: 'Isya',    icon: '🌙' },
 ];
 
-const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const DAYS_ID   = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const MONTHS_ID  = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DAYS_ID    = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 const DAYS_SHORT = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
 
 const MOTIVASI_QUOTES = [
@@ -89,45 +95,55 @@ let currentView  = 'dashboard';
 let db = {};
 let settings = { name: '', target: 150, motivation: '' };
 
-// ── Per-user storage key ───────────────────
-function storageKey() {
-  return `sholat_tracker_${currentUser ? currentUser.username : 'guest'}`;
-}
+// ── STORAGE: Diganti API ───────────────────
+// Fungsi storageKey() tidak diperlukan lagi karena
+// server sudah tahu siapa user dari JWT token.
 
-// ── Storage ────────────────────────────────
-function loadData() {
+async function loadData() {
   try {
-    const raw = localStorage.getItem(storageKey());
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      db       = parsed.db       || {};
-      settings = { ...settings, ...(parsed.settings || {}) };
-    }
-  } catch { db = {}; }
+    // Load settings dari server
+    const s = await apiLoadSettings();
+    settings = { ...settings, ...s };
+
+    // Load data bulan ini dari server
+    const monthData = await apiLoadMonth(currentYear, currentMonth);
+    db = { ...db, ...monthData };
+  } catch (e) {
+    console.error('Gagal load data:', e);
+    db = {};
+  }
 }
 
-function saveData() {
-  localStorage.setItem(storageKey(), JSON.stringify({ db, settings }));
-  // Also sync to admin pool
-  syncToAdmin();
-}
-
-function syncToAdmin() {
+async function saveData(dKey) {
+  // dKey = dateKey yang baru diubah, misal '2025-06-15'
+  // Kalau tidak dikirim, default ke hari ini
+  if (!dKey) dKey = todayKey();
+  const dayData = db[dKey];
+  if (!dayData) return;
   try {
-    const key = 'sholat_admin_users';
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const idx = existing.findIndex(u => u.username === currentUser?.username);
-    const payload = {
-      username: currentUser?.username || '',
-      name: currentUser?.name || settings.name || 'Pengguna',
-      lastSync: new Date().toISOString(),
-      db, settings
-    };
-    if (idx >= 0) existing[idx] = payload;
-    else existing.push(payload);
-    localStorage.setItem(key, JSON.stringify(existing));
-  } catch {}
+    await apiSaveDay(dKey, dayData);
+  } catch (e) {
+    console.error('Gagal simpan:', e);
+    showToast('⚠️ Gagal menyimpan ke server. Cek koneksi.');
+  }
 }
+
+async function saveSettings() {
+  settings.name       = document.getElementById('set-name').value.trim();
+  settings.target     = parseInt(document.getElementById('set-target').value) || 150;
+  settings.motivation = document.getElementById('set-motivation').value.trim();
+  try {
+    await apiSaveSettings(settings);
+    renderStats();
+    showToast('✅ Pengaturan tersimpan!');
+  } catch (e) {
+    showToast('⚠️ Gagal menyimpan pengaturan.');
+  }
+}
+
+// syncToAdmin() dihapus — tidak diperlukan lagi.
+// Data langsung tersimpan di database, admin bisa
+// lihat via api/admin.php.
 
 // ── Key helpers ────────────────────────────
 function dateKey(y, m, d) {
@@ -258,7 +274,7 @@ function renderTodayPrayers() {
   container.innerHTML = '';
 
   PRAYERS.forEach(p => {
-    const val = data[p.key]; // false | 'sendiri' | 'jamaah'
+    const val = data[p.key];
     const isDone = isPrayerDone(val);
     const item = document.createElement('div');
     item.className = 'prayer-item' + (isDone ? ' checked' : '');
@@ -282,14 +298,12 @@ function renderTodayPrayers() {
   const col = total===5?'#4ade80':total>=3?'#fbbf24':total>0?'#f87171':'rgba(255,255,255,0.2)';
   document.getElementById('progress-ring').style.stroke = col;
 
-  // Extra ibadah today
   renderTodayExtras(key, data);
 }
 
 function setPrayerMode(event, key, prayerKey, mode) {
   event.stopPropagation();
   if (!db[key]) db[key] = { subuh:false, dzuhur:false, ashar:false, maghrib:false, isya:false, dhuha:false, tahajud:false, quran:0, puasa:false, note:'' };
-  // Toggle: if already this mode, un-check
   if (db[key][prayerKey] === mode) {
     db[key][prayerKey] = false;
     showToast(`❌ ${PRAYERS.find(p=>p.key===prayerKey).label} dibatalkan`);
@@ -298,7 +312,7 @@ function setPrayerMode(event, key, prayerKey, mode) {
     const modeLabel = mode === 'jamaah' ? 'berjamaah 🕌' : 'sendiri 🧍';
     showToast(`✅ ${PRAYERS.find(p=>p.key===prayerKey).label} — ${modeLabel}`);
   }
-  saveData();
+  saveData(key); // kirim key supaya hanya hari itu yang di-update
   renderAll();
 }
 
@@ -306,42 +320,38 @@ function togglePrayer(key, prayerKey) {
   if (!db[key]) db[key] = { subuh:false, dzuhur:false, ashar:false, maghrib:false, isya:false, dhuha:false, tahajud:false, quran:0, puasa:false, note:'' };
   const cur = db[key][prayerKey];
   if (!cur || cur === false) {
-    db[key][prayerKey] = 'sendiri'; // default to sendiri
+    db[key][prayerKey] = 'sendiri';
     showToast(`✅ ${PRAYERS.find(p=>p.key===prayerKey).label} tercatat!`);
   } else {
     db[key][prayerKey] = false;
     showToast(`❌ ${PRAYERS.find(p=>p.key===prayerKey).label} dibatalkan`);
   }
-  saveData();
+  saveData(key);
   renderAll();
 }
 
 // ── RENDER: TODAY EXTRAS ───────────────────
 function renderTodayExtras(key, data) {
-  // Dhuha
   const dhuhaToggle = document.getElementById('today-dhuha');
   if (dhuhaToggle) {
     dhuhaToggle.className = 'toggle-extra' + (data.dhuha ? ' on' : '');
     dhuhaToggle.onclick = () => toggleExtra(key, 'dhuha');
   }
-  // Tahajud
   const tahajudToggle = document.getElementById('today-tahajud');
   if (tahajudToggle) {
     tahajudToggle.className = 'toggle-extra' + (data.tahajud ? ' on' : '');
     tahajudToggle.onclick = () => toggleExtra(key, 'tahajud');
   }
-  // Quran
   const quranInput = document.getElementById('today-quran');
   if (quranInput) {
     quranInput.value = data.quran || 0;
     quranInput.onchange = (e) => {
       if (!db[key]) db[key] = getDayData(key);
       db[key].quran = Math.max(0, parseInt(e.target.value) || 0);
-      saveData();
+      saveData(key);
       showToast(`📖 Quran: ${db[key].quran} halaman`);
     };
   }
-  // Puasa
   const puasaToggle = document.getElementById('today-puasa');
   if (puasaToggle) {
     puasaToggle.className = 'toggle-extra' + (data.puasa ? ' on' : '');
@@ -352,7 +362,7 @@ function renderTodayExtras(key, data) {
 function toggleExtra(key, field) {
   if (!db[key]) db[key] = getDayData(key);
   db[key][field] = !db[key][field];
-  saveData();
+  saveData(key);
   const labels = { dhuha:'Sholat Dhuha', tahajud:'Sholat Tahajud', puasa:'Puasa' };
   showToast(db[key][field] ? `✅ ${labels[field]} tercatat!` : `❌ ${labels[field]} dibatalkan`);
   renderAll();
@@ -367,7 +377,6 @@ function renderStats() {
   document.getElementById('stat-month-complete').textContent = ms.fullDays;
   document.getElementById('stat-total-prayer').textContent = ms.totalPrayers;
   document.getElementById('stat-percent').textContent = ms.pct + '%';
-  // Target
   const goal = settings.target || 150;
   document.getElementById('target-current').textContent = ms.totalPrayers;
   document.getElementById('target-goal').textContent = goal;
@@ -375,7 +384,6 @@ function renderStats() {
   document.getElementById('target-bar-fill').style.width = pct + '%';
   document.getElementById('target-motivation').textContent =
     settings.motivation || MOTIVASI_QUOTES[new Date().getDate() % MOTIVASI_QUOTES.length];
-  // Extra stats
   const esDhuha   = document.getElementById('es-dhuha');
   const esTahajud = document.getElementById('es-tahajud');
   const esQuran   = document.getElementById('es-quran');
@@ -451,7 +459,6 @@ function renderTrackerTable() {
       <td class="td-day" style="${isFriday?'color:var(--gold-light);font-weight:700':''}">${dayName}${isFriday?' 🕌':''}</td>
     `;
 
-    // Prayer cells with mode
     PRAYERS.forEach(p => {
       const td  = document.createElement('td');
       const val = data[p.key];
@@ -466,18 +473,16 @@ function renderTrackerTable() {
       btn.onclick = () => { togglePrayer(key, p.key); };
       wrap.appendChild(btn);
 
-      // Mode badge
       if (done) {
         const badge = document.createElement('span');
         badge.className = `jamaah-badge ${val==='jamaah'?'jamaah':val==='sendiri'?'sendiri':'none'}`;
         badge.textContent = val==='jamaah'?'jamaah':val==='sendiri'?'sendiri':'';
-        // Clicking badge cycles mode
         badge.style.cursor = 'pointer';
         badge.title = 'Klik untuk ganti mode';
         badge.onclick = () => {
           if (!db[key]) db[key] = getDayData(key);
           db[key][p.key] = db[key][p.key]==='sendiri'?'jamaah':'sendiri';
-          saveData(); renderTrackerTable(); renderStats();
+          saveData(key); renderTrackerTable(); renderStats();
           showToast(`🔄 ${p.label} → ${db[key][p.key]==='jamaah'?'Berjamaah 🕌':'Sendiri 🧍'}`);
         };
         wrap.appendChild(badge);
@@ -516,7 +521,7 @@ function renderTrackerTable() {
     qInput.onchange = (e) => {
       if (!db[key]) db[key] = getDayData(key);
       db[key].quran = Math.max(0, parseInt(e.target.value) || 0);
-      saveData();
+      saveData(key);
     };
     tdQuran.appendChild(qInput);
     tr.appendChild(tdQuran);
@@ -547,7 +552,7 @@ function renderTrackerTable() {
     input.placeholder = 'Catatan...'; input.maxLength = 80;
     input.oninput = (e) => {
       if (!db[key]) db[key] = getDayData(key);
-      db[key].note = e.target.value; saveData();
+      db[key].note = e.target.value; saveData(key);
     };
     tdNote.appendChild(input);
     tr.appendChild(tdNote);
@@ -586,7 +591,6 @@ function renderPrayerBars() {
     container.appendChild(row);
   });
 
-  // Jamaah stats bar
   const ms = getMonthStats(currentYear, currentMonth);
   const jamaahPct = ms.totalPrayers > 0 ? Math.round((ms.jamaahCount / ms.totalPrayers) * 100) : 0;
   const jRow = document.createElement('div');
@@ -665,16 +669,16 @@ function renderSummaryGrid() {
   const ms = getMonthStats(currentYear, currentMonth);
   const streak = calcStreak();
   const items = [
-    { label: 'Total Sholat',       value: ms.totalPrayers },
-    { label: 'Hari Lengkap',       value: ms.fullDays },
-    { label: 'Persen Keberhasilan',value: ms.pct + '%' },
-    { label: 'Streak Saat Ini',    value: `🔥 ${streak} hari` },
-    { label: 'Sholat Berjamaah',   value: `🕌 ${ms.jamaahCount}x` },
-    { label: 'Sholat Dhuha',       value: `☀️ ${ms.dhuhaCount} hari` },
-    { label: 'Sholat Tahajud',     value: `🌙 ${ms.tahajudCount} hari` },
-    { label: 'Total Quran',        value: `📖 ${ms.totalQuran} hal` },
-    { label: 'Hari Puasa',         value: `🍽️ ${ms.puasaCount} hari` },
-    { label: 'Hari Diisi',         value: `${ms.filledDays} / ${ms.daysInMonth}` },
+    { label: 'Total Sholat',        value: ms.totalPrayers },
+    { label: 'Hari Lengkap',        value: ms.fullDays },
+    { label: 'Persen Keberhasilan', value: ms.pct + '%' },
+    { label: 'Streak Saat Ini',     value: `🔥 ${streak} hari` },
+    { label: 'Sholat Berjamaah',    value: `🕌 ${ms.jamaahCount}x` },
+    { label: 'Sholat Dhuha',        value: `☀️ ${ms.dhuhaCount} hari` },
+    { label: 'Sholat Tahajud',      value: `🌙 ${ms.tahajudCount} hari` },
+    { label: 'Total Quran',         value: `📖 ${ms.totalQuran} hal` },
+    { label: 'Hari Puasa',          value: `🍽️ ${ms.puasaCount} hari` },
+    { label: 'Hari Diisi',          value: `${ms.filledDays} / ${ms.daysInMonth}` },
   ];
   container.innerHTML = '';
   items.forEach(item => {
@@ -688,25 +692,34 @@ function renderSummaryGrid() {
 // ── MONTH NAV ──────────────────────────────
 function prevMonth() {
   if (currentMonth===0){currentMonth=11;currentYear--;} else currentMonth--;
-  renderAll();
+  // Load data bulan yang dipilih dari server
+  apiLoadMonth(currentYear, currentMonth).then(monthData => {
+    db = { ...db, ...monthData };
+    renderAll();
+  });
 }
 function nextMonth() {
   if (currentMonth===11){currentMonth=0;currentYear++;} else currentMonth++;
-  renderAll();
+  apiLoadMonth(currentYear, currentMonth).then(monthData => {
+    db = { ...db, ...monthData };
+    renderAll();
+  });
 }
 
 // ── TARGET EDIT ────────────────────────────
-function editTarget() {
+async function editTarget() {
   const newTarget = prompt('Masukkan target sholat bulan ini:', settings.target || 150);
   if (newTarget!==null && !isNaN(parseInt(newTarget))) {
     settings.target = Math.max(1, Math.min(155, parseInt(newTarget)));
     const newMotiv = prompt('Masukkan motivasi kamu:', settings.motivation || '');
     if (newMotiv!==null) settings.motivation = newMotiv;
-    saveData(); renderStats(); showToast('🎯 Target berhasil diperbarui!');
+    await apiSaveSettings(settings);
+    renderStats();
+    showToast('🎯 Target berhasil diperbarui!');
   }
 }
 
-// ── SETTINGS ──────────────────────────────
+// ── SETTINGS FORM ──────────────────────────
 function loadSettingsForm() {
   const sn = document.getElementById('set-name');
   const st = document.getElementById('set-target');
@@ -716,12 +729,7 @@ function loadSettingsForm() {
   if (sm) sm.value = settings.motivation || '';
 }
 
-function saveSettings() {
-  settings.name       = document.getElementById('set-name').value.trim();
-  settings.target     = parseInt(document.getElementById('set-target').value) || 150;
-  settings.motivation = document.getElementById('set-motivation').value.trim();
-  saveData(); renderStats(); showToast('✅ Pengaturan tersimpan!');
-}
+// saveSettings() sudah didefinisikan di atas (versi async)
 
 // ── EXPORT / IMPORT / RESET ────────────────
 function exportData() {
@@ -736,25 +744,40 @@ function exportData() {
 function importData(event) {
   const file = event.target.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const parsed = JSON.parse(e.target.result);
-      db = parsed.db || {}; settings = { ...settings, ...(parsed.settings || {}) };
-      saveData(); loadSettingsForm(); renderAll(); showToast('📥 Data berhasil diimport!');
+      const importedDb = parsed.db || {};
+      const importedSettings = parsed.settings || {};
+      // Simpan semua hari yang ada ke server satu per satu
+      showToast('⏳ Mengimpor data ke server...');
+      for (const [dKey, dayData] of Object.entries(importedDb)) {
+        db[dKey] = dayData;
+        await apiSaveDay(dKey, dayData);
+      }
+      settings = { ...settings, ...importedSettings };
+      await apiSaveSettings(settings);
+      loadSettingsForm(); renderAll();
+      showToast('📥 Data berhasil diimport ke database!');
     } catch { showToast('❌ File tidak valid!'); }
   };
   reader.readAsText(file);
 }
 
-function resetData() {
+async function resetData() {
   if (confirm('Yakin ingin menghapus SEMUA data? Tindakan ini tidak dapat dibatalkan.')) {
-    db = {}; saveData(); renderAll(); showToast('🗑️ Semua data dihapus.');
+    try {
+      await apiDeleteAll();
+      db = {}; renderAll(); showToast('🗑️ Semua data dihapus.');
+    } catch {
+      showToast('⚠️ Gagal menghapus data dari server.');
+    }
   }
 }
 
-function shareToAdmin() {
-  syncToAdmin(); showToast('📡 Data berhasil dikirim ke admin!');
-}
+// shareToAdmin() dihapus — tidak diperlukan lagi.
+// Data sudah otomatis tersimpan di database yang
+// sama dan bisa dilihat admin kapan saja.
 
 // ── PRINT ──────────────────────────────────
 function printView(viewName) {
@@ -785,13 +808,17 @@ function renderAll() {
 // ── INIT ───────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (!checkAuth()) return;
-  loadData();
-  // Sync name from user session if no settings name
-  if (!settings.name && currentUser?.name) {
-    settings.name = currentUser.name;
-    saveData();
-  }
-  renderAll();
+
+  // Load data dari server, baru render
+  loadData().then(() => {
+    // Sync nama dari session jika belum ada di settings
+    if (!settings.name && currentUser?.name) {
+      settings.name = currentUser.name;
+      apiSaveSettings(settings); // simpan diam-diam
+    }
+    renderAll();
+  });
+
   window.addEventListener('resize', () => {
     if (currentView==='statistics') renderWeeklyChart();
   });
