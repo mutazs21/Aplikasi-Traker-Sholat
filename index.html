@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Sholat Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green-950: #052e16; --green-900: #14532d; --green-800: #166534;
+      --green-700: #15803d; --green-600: #16a34a; --green-500: #22c55e;
+      --green-400: #4ade80; --green-300: #86efac; --green-200: #bbf7d0;
+      --gold: #f59e0b; --gold-light: #fcd34d;
+      --bg-base: #070f0a; --bg-card: rgba(15,30,18,0.85);
+      --text-prim: #f0fdf4; --text-sec: #86efac; --text-dim: #6b7280;
+      --border: rgba(74,222,128,0.18); --border-strong: rgba(74,222,128,0.35);
+      --red: #f87171; --radius: 18px; --radius-sm: 12px;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-arabic: 'Amiri', serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-base);
+      color: var(--text-prim);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    /* Ambient */
+    .ambient-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .orb {
+      position: absolute; border-radius: 50%;
+      filter: blur(90px); opacity: 0.28;
+      animation: float 14s ease-in-out infinite;
+    }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, #15803d, transparent); top: -200px; left: -200px; }
+    .orb-2 { width: 450px; height: 450px; background: radial-gradient(circle, #166534, transparent); bottom: -100px; right: -100px; animation-delay: -5s; }
+    .orb-3 { width: 300px; height: 300px; background: radial-gradient(circle, #f59e0b30, transparent); top: 40%; left: 55%; animation-delay: -9s; }
+    @keyframes float { 0%,100%{transform:translate(0,0)scale(1)} 40%{transform:translate(30px,-40px)scale(1.07)} 70%{transform:translate(-20px,25px)scale(0.93)} }
+
+    /* Container */
+    .login-wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 440px;
+      padding: 20px;
+    }
+    .login-card {
+      background: linear-gradient(160deg, rgba(13,28,18,0.97) 0%, rgba(7,15,10,0.98) 100%);
+      backdrop-filter: blur(30px);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(74,222,128,0.06);
+      animation: slideUp 0.5s cubic-bezier(0.4,0,0.2,1) both;
+    }
+    @keyframes slideUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+
+    /* Header */
+    .login-header { text-align: center; margin-bottom: 32px; }
+    .login-logo { font-size: 48px; margin-bottom: 12px; filter: drop-shadow(0 0 20px rgba(74,222,128,0.4)); }
+    .login-arabic {
+      font-family: var(--font-arabic);
+      font-size: 20px; color: var(--gold-light);
+      line-height: 1.8; margin-bottom: 12px;
+    }
+    .login-title {
+      font-size: 26px; font-weight: 800;
+      background: linear-gradient(135deg, var(--green-300), var(--green-500));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 6px;
+    }
+    .login-sub { font-size: 13px; color: var(--text-dim); }
+
+    /* Tabs */
+    .login-tabs {
+      display: flex; gap: 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px; margin-bottom: 24px;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px;
+      border: none; border-radius: 9px;
+      font-family: var(--font-body); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.25s;
+      background: transparent; color: var(--text-dim);
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--green-700), var(--green-600));
+      color: #fff; box-shadow: 0 4px 14px rgba(22,163,74,0.35);
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sec); margin-bottom: 7px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: rgba(74,222,128,0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-prim); font-family: var(--font-body);
+      font-size: 14px; outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus { border-color: var(--green-500); background: rgba(74,222,128,0.08); box-shadow: 0 0 0 3px rgba(74,222,128,0.1); }
+    .form-input::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+    .btn-login {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--green-700), var(--green-500));
+      border: none; border-radius: var(--radius-sm);
+      color: white; font-family: var(--font-body);
+      font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: all 0.25s;
+      letter-spacing: 0.02em; margin-top: 8px;
+    }
+    .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(22,163,74,0.45); }
+    .btn-login:active { transform: translateY(0); }
+
+    /* Error/Success */
+    .alert {
+      padding: 12px 14px; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
+      margin-bottom: 16px; display: none;
+    }
+    .alert.error { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+    .alert.success { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: var(--green-300); }
+    .alert.show { display: block; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+    /* Info box */
+    .demo-info {
+      margin-top: 20px; padding: 14px;
+      background: rgba(245,158,11,0.07);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: var(--radius-sm);
+      font-size: 12px; color: var(--gold-light); line-height: 1.7;
+    }
+    .demo-info strong { color: var(--gold); }
+
+    /* Register form */
+    .register-form { display: none; }
+    .register-form.active { display: block; }
+    .login-form { display: block; }
+    .login-form.hidden { display: none; }
+
+    /* Password strength */
+    .pw-hint { font-size: 11px; color: var(--text-dim); margin-top: 5px; }
+
+    @media (max-width: 480px) {
+      .login-card { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">🕌</div>
+        <p class="login-arabic">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم</p>
+        <h1 class="login-title">Sholat Tracker</h1>
+        <p class="login-sub">Masuk untuk mulai mencatat ibadahmu</p>
+      </div>
+
+      <div class="login-tabs">
+        <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">🔑 Masuk</button>
+        <button class="tab-btn" id="tab-register" onclick="switchTab('register')">📝 Daftar</button>
+      </div>
+
+      <div id="alert-box" class="alert"></div>
+
+      <!-- LOGIN FORM -->
+      <div class="login-form" id="login-form">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" type="text" id="login-username" placeholder="Masukkan username..." autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="login-password" placeholder="Masukkan password..." autocomplete="current-password" />
+        </div>
+        <button class="btn-login" onclick="doLogin()">Masuk →</button>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div class="register-form" id="register-form">
+        <div class="form-group">
+          <label class="form-label">Nama Lengkap</label>
+          <input class="form-input" type="text" id="reg-name" placeholder="Nama kamu..." maxlength="60" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" type="text" id="reg-username" placeholder="Pilih username unik..." maxlength="30" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="reg-password" placeholder="Minimal 4 karakter..." maxlength="50" />
+          <p class="pw-hint">⚠️ Minimal 4 karakter. Data disimpan di browser.</p>
+        </div>
+        <button class="btn-login" onclick="doRegister()">Buat Akun →</button>
+      </div>
+
+      <div class="demo-info">
+        <strong>👑 Akun Admin Default:</strong><br>
+        Username: <strong>admin</strong> | Password: <strong>admin123</strong><br><br>
+        <strong>👤 Demo User:</strong><br>
+        Klik "Daftar" untuk buat akun baru, atau login dengan akun yang sudah dibuat.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ── Auth Storage ──────────────────────────
+    const USERS_KEY = 'sholat_users';
+    const SESSION_KEY = 'sholat_session';
+
+    function getUsers() {
+      try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveUsers(users) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    }
+    function initDefaultAdmin() {
+      const users = getUsers();
+      if (!users.find(u => u.username === 'admin')) {
+        users.push({ username: 'admin', password: 'admin123', name: 'Administrator', role: 'admin', createdAt: new Date().toISOString() });
+        saveUsers(users);
+      }
+    }
+    initDefaultAdmin();
+
+    // ── Check already logged in ───────────────
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (session && session.username) {
+      if (session.role === 'admin') window.location.href = 'admin.html';
+      else window.location.href = 'app.html';
+    }
+
+    // ── Tab switching ─────────────────────────
+    function switchTab(tab) {
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+      document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+      document.getElementById('register-form').classList.toggle('active', tab === 'register');
+      hideAlert();
+    }
+
+    // ── Alert ──────────────────────────────────
+    function showAlert(msg, type = 'error') {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg;
+      el.className = `alert ${type} show`;
+    }
+    function hideAlert() {
+      document.getElementById('alert-box').classList.remove('show');
+    }
+
+    // ── Login ──────────────────────────────────
+    function doLogin() {
+      const username = document.getElementById('login-username').value.trim().toLowerCase();
+      const password = document.getElementById('login-password').value;
+      if (!username || !password) { showAlert('⚠️ Isi username dan password!'); return; }
+      const users = getUsers();
+      const user = users.find(u => u.username === username && u.password === password);
+      if (!user) { showAlert('❌ Username atau password salah!'); return; }
+      // Create session
+      const session = { username: user.username, name: user.name, role: user.role, loginAt: new Date().toISOString() };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      showAlert(`✅ Selamat datang, ${user.name}! 🌟`, 'success');
+      setTimeout(() => {
+        if (user.role === 'admin') window.location.href = 'admin.html';
+        else window.location.href = 'app.html';
+      }, 800);
+    }
+
+    // ── Register ───────────────────────────────
+    function doRegister() {
+      const name = document.getElementById('reg-name').value.trim();
+      const username = document.getElementById('reg-username').value.trim().toLowerCase();
+      const password = document.getElementById('reg-password').value;
+      if (!name || !username || !password) { showAlert('⚠️ Semua field harus diisi!'); return; }
+      if (password.length < 4) { showAlert('⚠️ Password minimal 4 karakter!'); return; }
+      if (!/^[a-z0-9_]+$/.test(username)) { showAlert('⚠️ Username hanya boleh huruf, angka, dan _'); return; }
+      const users = getUsers();
+      if (users.find(u => u.username === username)) { showAlert('❌ Username sudah dipakai!'); return; }
+      const newUser = { username, password, name, role: 'user', createdAt: new Date().toISOString() };
+      users.push(newUser);
+      saveUsers(users);
+      showAlert('✅ Akun berhasil dibuat! Silakan login.', 'success');
+      setTimeout(() => {
+        switchTab('login');
+        document.getElementById('login-username').value = username;
+      }, 1000);
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (!document.getElementById('register-form').classList.contains('active')) doLogin();
+      else doRegister();
+    });
+  </script>
+</body>
+</html>

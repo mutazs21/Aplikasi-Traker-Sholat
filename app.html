@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sholat Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── Print Styles ─────────────────────────── */
+    @media print {
+      body { background: white !important; color: #111 !important; }
+      .ambient-bg, .sidebar, .mobile-header, .toast,
+      .btn-print, .modal-overlay, .month-nav-large,
+      .setting-row input[type=file], .settings-actions,
+      .hamburger, .prayer-mode-wrap { display: none !important; }
+      .app-shell { display: block; }
+      .main-content { margin-left: 0 !important; padding: 20px !important; }
+      .view { display: none !important; }
+      .view.print-target { display: block !important; }
+      .glass-card { background: #fff !important; border: 1px solid #ccc !important; box-shadow: none !important; backdrop-filter: none !important; color: #111 !important; break-inside: avoid; }
+      .page-title { color: #111 !important; }
+      .page-subtitle { color: #444 !important; }
+      .tracker-table { font-size: 10px; }
+      .tracker-table th, .tracker-table td { border: 1px solid #ddd !important; padding: 3px 5px !important; color: #111 !important; }
+      .prayer-checkbox { border: 1px solid #888 !important; background: #f5f5f5 !important; color: #111 !important; }
+      .prayer-checkbox.checked { background: #d1fae5 !important; color: #065f46 !important; }
+      .print-header { display: block !important; }
+      .total-badge { border: 1px solid #888 !important; background: #f5f5f5 !important; color: #111 !important; }
+      .total-badge.total-5 { background: #d1fae5 !important; }
+      .td-note input { border: 1px solid #ddd !important; background: transparent !important; color: #111 !important; }
+      .stat-card { background: #f9f9f9 !important; border: 1px solid #ddd !important; }
+      .stat-value, .stat-label { color: #111 !important; }
+      .hijri-badge { background: #f0fdf4 !important; border: 1px solid #86efac !important; color: #065f46 !important; }
+    }
+    .print-header { display: none; text-align: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #ccc; }
+    .print-header h2 { font-size: 20px; color: #065f46; margin-bottom: 4px; }
+    .print-header p { font-size: 13px; color: #444; }
+
+    /* ── Admin Link styling ─── */
+    .nav-btn.admin-link {
+      background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.06));
+      border: 1px solid rgba(245,158,11,0.25);
+      color: var(--gold-light);
+      margin-top: 4px;
+    }
+    .nav-btn.admin-link:hover { background: rgba(245,158,11,0.18); }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Background -->
+  <div class="ambient-bg">
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+    <div class="noise-overlay"></div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">🕌</div>
+        <div class="brand-text">
+          <span class="brand-title">Sholat</span>
+          <span class="brand-sub">Tracker</span>
+        </div>
+      </div>
+
+      <!-- User Banner -->
+      <div class="user-banner" id="sidebar-user-banner" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:linear-gradient(135deg,rgba(22,163,74,0.18),rgba(245,158,11,0.1));border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:16px;">
+        <div style="width:38px;height:38px;background:linear-gradient(135deg,var(--green-700),var(--green-500));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;flex-shrink:0;" id="sidebar-avatar">?</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;color:var(--text-prim);" id="sidebar-name">—</div>
+          <span id="sidebar-role" class="role-badge user">👤 User</span>
+        </div>
+      </div>
+
+      <div class="arabic-quote">
+        <p class="arabic-text">إِنَّ الصَّلَاةَ تَنْهَىٰ عَنِ الْفَحْشَاءِ وَالْمُنكَرِ</p>
+        <p class="arabic-trans">"Sesungguhnya sholat mencegah dari perbuatan keji dan mungkar." — QS. Al-Ankabut: 45</p>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-view="dashboard" onclick="showView('dashboard')">
+          <span class="nav-icon">📊</span><span>Dashboard</span>
+        </button>
+        <button class="nav-btn" data-view="tracker" onclick="showView('tracker')">
+          <span class="nav-icon">☑️</span><span>Tracker Harian</span>
+        </button>
+        <button class="nav-btn" data-view="statistics" onclick="showView('statistics')">
+          <span class="nav-icon">📈</span><span>Statistik</span>
+        </button>
+        <button class="nav-btn" data-view="settings" onclick="showView('settings')">
+          <span class="nav-icon">⚙️</span><span>Pengaturan</span>
+        </button>
+        <button class="nav-btn admin-link" id="admin-nav-link" style="display:none;" onclick="window.location.href='admin.html'">
+          <span class="nav-icon">🛡️</span><span>Panel Admin</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="streak-badge" id="sidebar-streak">
+          <span class="streak-fire">🔥</span>
+          <span class="streak-num" id="streak-display">0</span>
+          <span class="streak-label">hari streak</span>
+        </div>
+        <button class="btn-logout" onclick="logout()">
+          <span>🚪</span><span>Keluar</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MOBILE TOP BAR -->
+    <header class="mobile-header">
+      <button class="hamburger" onclick="toggleSidebar()" id="hamburger">
+        <span></span><span></span><span></span>
+      </button>
+      <span class="mobile-title">🕌 Sholat Tracker</span>
+      <div class="mobile-date" id="mobile-date"></div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- ══════ VIEW: DASHBOARD ══════ -->
+      <section class="view active" id="view-dashboard">
+        <div class="print-header" id="print-header-dashboard">
+          <h2>🕌 Laporan Sholat Tracker</h2>
+          <p id="print-name-dashboard"></p><p id="print-date-dashboard"></p>
+        </div>
+
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle" id="today-full-date"></p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="hijri-badge" id="hijri-date">
+              <span class="hijri-icon">🌙</span>
+              <span id="hijri-text">— Hijriah</span>
+            </div>
+            <button class="btn-print" onclick="printView('dashboard')">🖨️ Cetak PDF</button>
+          </div>
+        </div>
+
+        <!-- Today Prayer Card -->
+        <div class="today-card glass-card">
+          <div class="today-card-header">
+            <h2>Sholat Hari Ini</h2>
+            <div style="font-size:11px;color:var(--text-dim);text-align:right;">
+              <div>🧍 Sendiri &nbsp; 🕌 Berjamaah</div>
+              <div style="margin-top:2px;">Klik ikon untuk pilih mode</div>
+            </div>
+            <div class="today-progress-ring">
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="6"/>
+                <circle cx="36" cy="36" r="28" fill="none" stroke="#4ade80" stroke-width="6"
+                        stroke-linecap="round" stroke-dasharray="175.9"
+                        stroke-dashoffset="175.9" id="progress-ring" transform="rotate(-90 36 36)"/>
+              </svg>
+              <span class="ring-count" id="ring-count">0/5</span>
+            </div>
+          </div>
+          <div class="prayer-grid" id="today-prayers"><!-- Rendered by JS --></div>
+        </div>
+
+        <!-- Extra Ibadah Card -->
+        <div class="glass-card extra-ibadah-card">
+          <div class="card-header-row">
+            <h3>✨ Ibadah Tambahan Hari Ini</h3>
+          </div>
+          <div class="extra-grid">
+            <!-- Dhuha -->
+            <div class="extra-item">
+              <div class="extra-header">
+                <span class="extra-icon">☀️</span>
+                <span class="extra-label">Sholat Dhuha</span>
+                <button class="toggle-extra" id="today-dhuha"></button>
+              </div>
+              <div style="font-size:11px;color:var(--text-dim);">Sholat sunnah pagi (2–12 rakaat)</div>
+            </div>
+            <!-- Tahajud -->
+            <div class="extra-item">
+              <div class="extra-header">
+                <span class="extra-icon">🌙</span>
+                <span class="extra-label">Sholat Tahajud</span>
+                <button class="toggle-extra" id="today-tahajud"></button>
+              </div>
+              <div style="font-size:11px;color:var(--text-dim);">Sholat malam setelah tidur</div>
+            </div>
+            <!-- Quran -->
+            <div class="extra-item">
+              <div class="extra-header">
+                <span class="extra-icon">📖</span>
+                <span class="extra-label">Baca Al-Qur'an</span>
+              </div>
+              <div class="quran-input-wrap">
+                <input type="number" class="quran-input" id="today-quran" min="0" max="604" value="0" />
+                <span class="quran-unit">halaman</span>
+              </div>
+            </div>
+            <!-- Puasa -->
+            <div class="extra-item">
+              <div class="extra-header">
+                <span class="extra-icon">🍽️</span>
+                <span class="extra-label">Puasa</span>
+                <button class="toggle-extra" id="today-puasa"></button>
+              </div>
+              <div style="font-size:11px;color:var(--text-dim);">Puasa wajib / sunnah</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card glass-card">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-info"><span class="stat-value" id="stat-streak">0</span><span class="stat-label">Hari Streak</span></div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info"><span class="stat-value" id="stat-month-complete">0</span><span class="stat-label">Hari Lengkap</span></div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon">📿</div>
+            <div class="stat-info"><span class="stat-value" id="stat-total-prayer">0</span><span class="stat-label">Total Sholat</span></div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon">⭐</div>
+            <div class="stat-info"><span class="stat-value" id="stat-percent">0%</span><span class="stat-label">Keberhasilan</span></div>
+          </div>
+        </div>
+
+        <!-- Extra Stats -->
+        <div class="extra-stats-row">
+          <div class="extra-stat glass-card">
+            <div class="extra-stat-icon">☀️</div>
+            <div class="extra-stat-val" id="es-dhuha">0</div>
+            <div class="extra-stat-label">Hari Dhuha (bulan ini)</div>
+          </div>
+          <div class="extra-stat glass-card">
+            <div class="extra-stat-icon">🌙</div>
+            <div class="extra-stat-val" id="es-tahajud">0</div>
+            <div class="extra-stat-label">Hari Tahajud (bulan ini)</div>
+          </div>
+          <div class="extra-stat glass-card">
+            <div class="extra-stat-icon">📖</div>
+            <div class="extra-stat-val" id="es-quran">0 hal</div>
+            <div class="extra-stat-label">Total Quran (bulan ini)</div>
+          </div>
+          <div class="extra-stat glass-card">
+            <div class="extra-stat-icon">🍽️</div>
+            <div class="extra-stat-val" id="es-puasa">0</div>
+            <div class="extra-stat-label">Hari Puasa (bulan ini)</div>
+          </div>
+        </div>
+
+        <!-- Monthly Mini Calendar -->
+        <div class="glass-card mini-cal-card">
+          <div class="card-header-row">
+            <h3>Kalender Bulan Ini</h3>
+            <div class="month-nav">
+              <button onclick="prevMonth()" class="btn-icon">‹</button>
+              <span id="cal-month-label"></span>
+              <button onclick="nextMonth()" class="btn-icon">›</button>
+            </div>
+          </div>
+          <div class="mini-calendar" id="mini-calendar"></div>
+          <div class="cal-legend">
+            <span class="leg-item"><span class="leg-dot green"></span> Lengkap (5/5)</span>
+            <span class="leg-item"><span class="leg-dot yellow"></span> Sebagian (3-4)</span>
+            <span class="leg-item"><span class="leg-dot red"></span> Kurang (&lt;3)</span>
+            <span class="leg-item"><span class="leg-dot gray"></span> Belum diisi</span>
+          </div>
+        </div>
+
+        <!-- Target Card -->
+        <div class="glass-card target-card">
+          <div class="card-header-row">
+            <h3>🎯 Target Bulan Ini</h3>
+            <button class="btn-edit" onclick="editTarget()">Edit</button>
+          </div>
+          <div class="target-body">
+            <div class="target-progress-bar"><div class="target-bar-fill" id="target-bar-fill"></div></div>
+            <div class="target-numbers">
+              <span id="target-current">0</span>
+              <span class="target-sep">/</span>
+              <span id="target-goal">150</span>
+              <span class="target-unit">sholat</span>
+            </div>
+          </div>
+          <p class="target-motivation" id="target-motivation">✨ Tetap semangat, istiqamah adalah kunci!</p>
+        </div>
+      </section>
+
+      <!-- ══════ VIEW: TRACKER HARIAN ══════ -->
+      <section class="view" id="view-tracker">
+        <div class="print-header" id="print-header-tracker">
+          <h2>🕌 Laporan Tracker Harian Sholat</h2>
+          <p id="print-name-tracker"></p><p id="print-date-tracker"></p>
+        </div>
+        <div class="page-header">
+          <div class="page-header-left"><h1 class="page-title">Tracker Harian</h1></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="month-nav-large">
+              <button onclick="prevMonth()" class="btn-icon">‹</button>
+              <span id="tracker-month-label"></span>
+              <button onclick="nextMonth()" class="btn-icon">›</button>
+            </div>
+            <button class="btn-print" onclick="printView('tracker')">🖨️ Cetak PDF</button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="glass-card" style="padding:12px 20px;margin-bottom:16px;">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--text-dim);">
+            <strong style="color:var(--text-sec);">Keterangan:</strong>
+            <span><span class="jamaah-badge sendiri" style="margin-right:4px;">sendiri</span>Sholat Sendiri</span>
+            <span><span class="jamaah-badge jamaah" style="margin-right:4px;">jamaah</span>Sholat Berjamaah</span>
+            <span>☀️ Dhuha &nbsp; 🌙 Tahajud &nbsp; 📖 Quran (hal) &nbsp; 🍽️ Puasa</span>
+          </div>
+        </div>
+
+        <div class="glass-card table-card">
+          <div class="table-wrapper">
+            <table class="tracker-table" id="tracker-table">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Hari</th>
+                  <th><span class="prayer-th">🌅</span> Subuh</th>
+                  <th><span class="prayer-th">☀️</span> Dzuhur</th>
+                  <th><span class="prayer-th">🌤️</span> Ashar</th>
+                  <th><span class="prayer-th">🌆</span> Maghrib</th>
+                  <th><span class="prayer-th">🌙</span> Isya</th>
+                  <th class="col-extra">☀️ Dhuha</th>
+                  <th class="col-extra">🌙 Tahajud</th>
+                  <th class="col-extra">📖 Quran</th>
+                  <th class="col-extra">🍽️ Puasa</th>
+                  <th>Total</th>
+                  <th>Catatan</th>
+                </tr>
+              </thead>
+              <tbody id="tracker-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════ VIEW: STATISTIK ══════ -->
+      <section class="view" id="view-statistics">
+        <div class="print-header" id="print-header-statistics">
+          <h2>🕌 Laporan Statistik Sholat</h2>
+          <p id="print-name-statistics"></p><p id="print-date-statistics"></p>
+        </div>
+        <div class="page-header">
+          <h1 class="page-title">Statistik</h1>
+          <button class="btn-print" onclick="printView('statistics')">🖨️ Cetak PDF</button>
+        </div>
+
+        <div class="glass-card">
+          <h3 class="card-title">Konsistensi per Waktu Sholat</h3>
+          <div class="prayer-bars" id="prayer-bars"></div>
+        </div>
+        <div class="glass-card">
+          <h3 class="card-title">Grafik Mingguan (Bulan Ini)</h3>
+          <div class="bar-chart-wrap"><canvas id="weekly-chart" height="180"></canvas></div>
+        </div>
+        <div class="glass-card">
+          <h3 class="card-title">Heatmap Aktivitas</h3>
+          <div class="heatmap-grid" id="heatmap-grid"></div>
+        </div>
+        <div class="glass-card">
+          <h3 class="card-title">Ringkasan Bulan Ini</h3>
+          <div class="summary-grid" id="summary-grid"></div>
+        </div>
+      </section>
+
+      <!-- ══════ VIEW: SETTINGS ══════ -->
+      <section class="view" id="view-settings">
+        <div class="page-header"><h1 class="page-title">Pengaturan</h1></div>
+
+        <div class="glass-card settings-card">
+          <h3>👤 Profil</h3>
+          <div class="setting-row">
+            <label>Nama Lengkap</label>
+            <input type="text" class="setting-input" id="set-name" placeholder="Nama kamu..." />
+          </div>
+          <div class="setting-row">
+            <label>Target Sholat Bulanan</label>
+            <input type="number" class="setting-input" id="set-target" min="1" max="155" value="150" />
+          </div>
+        </div>
+
+        <div class="glass-card settings-card">
+          <h3>💬 Motivasi</h3>
+          <div class="setting-row">
+            <label>Quote Motivasi</label>
+            <textarea class="setting-input" id="set-motivation" rows="3" placeholder="Tulis motivasi kamu..."></textarea>
+          </div>
+        </div>
+
+        <div class="glass-card settings-card">
+          <h3>💾 Data</h3>
+          <div class="settings-actions">
+            <button class="btn-primary" onclick="exportData()">📤 Export Data (JSON)</button>
+            <label class="btn-secondary" for="import-file">📥 Import Data</label>
+            <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)" />
+            <button class="btn-primary" onclick="shareToAdmin()">📡 Kirim ke Admin</button>
+            <button class="btn-danger" onclick="resetData()">🗑️ Reset Semua Data</button>
+          </div>
+        </div>
+
+        <div class="glass-card settings-card">
+          <h3>ℹ️ Tentang</h3>
+          <p class="about-text">
+            <strong>Habit Tracker Sholat</strong><br>
+            Aplikasi pencatat ibadah harian berbasis web.<br>
+            Fitur: 5 waktu sholat (sendiri/berjamaah), Dhuha, Tahajud, Al-Qur'an, dan Puasa.<br>
+            Data tersimpan per akun di browser (LocalStorage).<br><br>
+            Semoga Allah memudahkan kita untuk istiqamah 🤲
+          </p>
+          <button class="btn-primary" onclick="saveSettings()">💾 Simpan Pengaturan</button>
+        </div>
+
+        <div class="glass-card settings-card" style="border-color:rgba(248,113,113,0.2);">
+          <h3 style="color:var(--red);">🔐 Akun</h3>
+          <p class="about-text">Kamu login sebagai akun yang tersimpan di browser ini.</p>
+          <button class="btn-danger" onclick="logout()">🚪 Logout</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
